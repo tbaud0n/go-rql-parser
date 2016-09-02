@@ -37,7 +37,7 @@ func (st *SqlTranslator) GetSimpleTranslatorFunc(op string, betweenParenthesis b
 				s = s + v
 			case *RqlNode:
 				var _s string
-				_s, err = st.Where(a.(*RqlNode))
+				_s, err = st.where(a.(*RqlNode))
 				if err != nil {
 					return "", err
 				}
@@ -57,7 +57,14 @@ func (st *SqlTranslator) GetSimpleTranslatorFunc(op string, betweenParenthesis b
 	})
 }
 
-func (st *SqlTranslator) Where(n *RqlNode) (string, error) {
+func (st *SqlTranslator) Where() (string, error) {
+	return st.where(st.rootNode.Node)
+}
+
+func (st *SqlTranslator) where(n *RqlNode) (string, error) {
+	if n == nil {
+		return ``, nil
+	}
 	f := st.sqlOpsDic[strings.ToUpper(n.Op)]
 	if f == nil {
 		return "", fmt.Errorf("No TranslatorOpFunc for op : '%s'", n.Op)
@@ -98,10 +105,11 @@ func (st *SqlTranslator) Sort() (sql string) {
 }
 
 func (st *SqlTranslator) Sql() (string, error) {
-	sql, err := st.Where(st.rootNode.Node)
+	sql, err := st.Where()
 	if err != nil {
 		return sql, err
 	}
+
 	sql = sql + st.Sort() + st.Limit() + st.Offset()
 
 	return sql, nil
@@ -114,7 +122,11 @@ func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 	st.SetOpFunc("OR", st.GetSimpleTranslatorFunc("OR", true, false))
 	st.SetOpFunc("EQ", st.GetSimpleTranslatorFunc("=", false, true))
 	st.SetOpFunc("LIKE", st.GetSimpleTranslatorFunc("LIKE", false, true))
-	st.SetOpFunc("MATCH", st.GetSimpleTranslatorFunc("ILIKE", false, true))
+	st.SetOpFunc("MATCH", TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
+		s = fmt.Sprintf("%s ILIKE '%s'", n.Args[0].(string), strings.Replace(n.Args[1].(string), "*", "%", -1))
+
+		return
+	}))
 
 	return
 }

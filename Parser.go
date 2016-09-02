@@ -3,6 +3,7 @@ package rqlParser
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -40,6 +41,14 @@ func (r *RqlRootNode) Limit() string {
 
 func (r *RqlRootNode) Offset() string {
 	return r.offset
+}
+
+func (r *RqlRootNode) OffsetInt() int {
+	i, err := strconv.Atoi(r.offset)
+	if err != nil {
+		return 0
+	}
+	return i
 }
 
 func (r *RqlRootNode) Sort() []Sort {
@@ -207,21 +216,27 @@ func splitByBasisOp(tb []TokenString) (op string, tbs [][]TokenString) {
 	prof := 0
 	lastIndex := 0
 
-	for i, ts := range tb {
-		if ts.t == OPENING_PARENTHESIS {
-			prof++
-		} else if ts.t == CLOSING_PARENTHESIS {
-			prof--
-		} else if prof == 0 {
-			if (ts.t == AMPERSAND || ts.t == COMMA) && isTokenInSlice([]Token{AMPERSAND, COMMA, ILLEGAL}, matchingToken) {
-				tbs = append(tbs, tb[lastIndex:i])
-				matchingToken = ts.t
-				lastIndex = i + 1
-			} else if (ts.t == PIPE || ts.t == SEMI_COLON) && isTokenInSlice([]Token{PIPE, SEMI_COLON, ILLEGAL}, matchingToken) {
-				tbs = append(tbs, tb[lastIndex:i])
-				matchingToken = ts.t
-				lastIndex = i + 1
+	basisTokenGroups := [][]Token{
+		[]Token{AMPERSAND, COMMA},
+		[]Token{PIPE, SEMI_COLON},
+	}
+	for _, bt := range basisTokenGroups {
+		btExtended := append(bt, ILLEGAL)
+		for i, ts := range tb {
+			if ts.t == OPENING_PARENTHESIS {
+				prof++
+			} else if ts.t == CLOSING_PARENTHESIS {
+				prof--
+			} else if prof == 0 {
+				if isTokenInSlice(bt, ts.t) && isTokenInSlice(btExtended, matchingToken) {
+					tbs = append(tbs, tb[lastIndex:i])
+					matchingToken = ts.t
+					lastIndex = i + 1
+				}
 			}
+		}
+		if lastIndex != 0 {
+			break
 		}
 	}
 
@@ -252,7 +267,11 @@ func getBlocNode(tb []TokenString) (*RqlNode, error) {
 	} else if isDoubleEqualBloc(tb) {
 
 		n.Op = tb[2].s
-		n.Args = []interface{}{tb[0].s, tb[4].s}
+		arg1 := ""
+		if len(tb) > 4 {
+			arg1 = tb[4].s
+		}
+		n.Args = []interface{}{tb[0].s, arg1}
 
 	} else {
 		return nil, fmt.Errorf("Unrecognized bloc : " + TokenBloc(tb).String())
