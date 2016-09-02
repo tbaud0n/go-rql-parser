@@ -90,7 +90,7 @@ func (st *SqlTranslator) Offset() (sql string) {
 func (st *SqlTranslator) Sort() (sql string) {
 	sorts := st.rootNode.Sort()
 	if len(sorts) > 0 {
-		sql = " SORT BY "
+		sql = " ORDER BY "
 		sep := ""
 		for _, sort := range sorts {
 			sql = sql + sep + sort.by

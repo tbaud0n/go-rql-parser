@@ -127,6 +127,9 @@ func (r *RqlRootNode) ParseSpecialOps() (err error) {
 				r.Node.Args = append(r.Node.Args[:sortIndex], r.Node.Args[sortIndex+1:]...)
 			}
 		}
+		if len(r.Node.Args) == 0 {
+			r.Node = nil
+		}
 	}
 
 	return
