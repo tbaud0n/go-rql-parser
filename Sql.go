@@ -2,7 +2,7 @@ package rqlParser
 
 import (
 	"fmt"
-	"strconv"
+	"net/url"
 	"strings"
 )
 
@@ -21,41 +21,41 @@ func (st *SqlTranslator) DeleteOpFunc(op string) {
 	delete(st.sqlOpsDic, strings.ToUpper(op))
 }
 
-func (st *SqlTranslator) GetSimpleTranslatorFunc(op string, betweenParenthesis bool, quoteStr bool) TranslatorOpFunc {
-	return TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
-		sep := ""
-		quote := ""
+// func (st *SqlTranslator) GetSimpleTranslatorFunc(op string, betweenParenthesis bool, quoteStr bool) TranslatorOpFunc {
+// 	return TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
+// 		sep := ""
+// 		quote := ""
 
-		for _, a := range n.Args {
-			s = s + sep
-			switch a.(type) {
-			case string:
-				v := a.(string)
-				if _, err := strconv.Atoi(v); err != nil {
-					v = quote + v + quote
-				}
-				s = s + v
-			case *RqlNode:
-				var _s string
-				_s, err = st.where(a.(*RqlNode))
-				if err != nil {
-					return "", err
-				}
-				s = s + _s
-			}
+// 		for _, a := range n.Args {
+// 			s = s + sep
+// 			switch a.(type) {
+// 			case string:
+// 				v := a.(string)
+// 				if _, err := strconv.Atoi(v); err != nil {
+// 					v = quote + v + quote
+// 				}
+// 				s = s + v
+// 			case *RqlNode:
+// 				var _s string
+// 				_s, err = st.where(a.(*RqlNode))
+// 				if err != nil {
+// 					return "", err
+// 				}
+// 				s = s + _s
+// 			}
 
-			sep = " " + op + " "
-			if quoteStr {
-				quote = "'"
-			}
-		}
+// 			sep = " " + op + " "
+// 			if quoteStr {
+// 				quote = "'"
+// 			}
+// 		}
 
-		if betweenParenthesis {
-			s = "(" + s + ")"
-		}
-		return
-	})
-}
+// 		if betweenParenthesis {
+// 			s = "(" + s + ")"
+// 		}
+// 		return
+// 	})
+// }
 
 func (st *SqlTranslator) Where() (string, error) {
 	return st.where(st.rootNode.Node)
@@ -118,15 +118,80 @@ func (st *SqlTranslator) Sql() (string, error) {
 func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 	st = &SqlTranslator{r, map[string]TranslatorOpFunc{}}
 
-	st.SetOpFunc("AND", st.GetSimpleTranslatorFunc("AND", true, false))
-	st.SetOpFunc("OR", st.GetSimpleTranslatorFunc("OR", true, false))
-	st.SetOpFunc("EQ", st.GetSimpleTranslatorFunc("=", false, true))
-	st.SetOpFunc("LIKE", st.GetSimpleTranslatorFunc("LIKE", false, true))
-	st.SetOpFunc("MATCH", TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
-		s = fmt.Sprintf("%s ILIKE '%s'", n.Args[0].(string), strings.Replace(n.Args[1].(string), "*", "%", -1))
-
-		return
-	}))
+	starToPercentFunc := AlterStringFunc(func(s string) string {
+		return strings.Replace(s, `*`, `%`, -1)
+	})
+	st.SetOpFunc("AND", st.GetAndOrTranslatorOpFunc("AND"))
+	st.SetOpFunc("OR", st.GetAndOrTranslatorOpFunc("OR"))
+	st.SetOpFunc("EQ", st.GetFieldValueTranslatorFunc("=", nil))
+	st.SetOpFunc("LIKE", st.GetFieldValueTranslatorFunc("LIKE", starToPercentFunc))
+	st.SetOpFunc("MATCH", st.GetFieldValueTranslatorFunc("ILIKE", starToPercentFunc))
 
 	return
+}
+
+func (st *SqlTranslator) GetAndOrTranslatorOpFunc(op string) TranslatorOpFunc {
+	return TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
+		sep := ""
+
+		for _, a := range n.Args {
+			s = s + sep
+			switch v := a.(type) {
+			case string:
+				if !IsValidField(v) {
+					return "", fmt.Errorf("Invalid field name : %s", v)
+				}
+				s = s + v
+			case *RqlNode:
+				var _s string
+				_s, err = st.where(v)
+				if err != nil {
+					return "", err
+				}
+				s = s + _s
+			}
+
+			sep = " " + op + " "
+		}
+
+		return "(" + s + ")", nil
+	})
+}
+
+type AlterStringFunc func(string) string
+
+func (st *SqlTranslator) GetFieldValueTranslatorFunc(op string, valueAlterFunc AlterStringFunc) TranslatorOpFunc {
+	return TranslatorOpFunc(func(n *RqlNode) (string, error) {
+		field := n.Args[0].(string)
+
+		if !IsValidField(field) {
+			return ``, fmt.Errorf("Invalid field name : %s", field)
+		}
+
+		value, err := url.QueryUnescape(n.Args[1].(string))
+		if err != nil {
+			return "", err
+		}
+
+		if valueAlterFunc != nil {
+			value = valueAlterFunc(value)
+		}
+		value = Quote(value)
+
+		return fmt.Sprintf("%s %s %s", field, op, value), nil
+	})
+}
+
+func IsValidField(s string) bool {
+	for _, ch := range s {
+		if !isLetter(ch) && !isDigit(ch) && ch != '_' && ch != '-' {
+			return false
+		}
+	}
+
+	return true
+}
+
+func Quote(s string) string {
+	return `'` + strings.Replace(s, `'`, `''`, -1) + `'`
 }
