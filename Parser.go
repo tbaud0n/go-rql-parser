@@ -270,11 +270,18 @@ func getBlocNode(tb []TokenString) (*RqlNode, error) {
 	} else if isDoubleEqualBloc(tb) {
 
 		n.Op = tb[2].s
-		arg1 := ""
-		if len(tb) > 4 {
-			arg1 = tb[4].s
+		n.Args = []interface{}{tb[0].s}
+		if len(tb) == 5 {
+			n.Args = append(n.Args, tb[4].s)
+		} else if isParenthesisBloc(tb[4:]) && findClosingIndex(tb[5:]) == len(tb)-6 {
+			args, err := parseFuncArgs(tb[5 : len(tb)-1])
+			if err != nil {
+				return nil, err
+			}
+			n.Args = append(n.Args, args...)
+		} else {
+			return nil, fmt.Errorf("Unrecognized DoubleEqual bloc : " + TokenBloc(tb).String())
 		}
-		n.Args = []interface{}{tb[0].s, arg1}
 
 	} else {
 		return nil, fmt.Errorf("Unrecognized bloc : " + TokenBloc(tb).String())
