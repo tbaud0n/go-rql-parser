@@ -56,6 +56,9 @@ func (r *RqlRootNode) Sort() []Sort {
 }
 
 func parseLimit(n *RqlNode, root *RqlRootNode) (isLimitOp bool) {
+	if n == nil {
+		return false
+	}
 	if strings.ToUpper(n.Op) == "LIMIT" {
 		root.limit = n.Args[0].(string)
 		if len(n.Args) > 1 {
@@ -67,6 +70,9 @@ func parseLimit(n *RqlNode, root *RqlRootNode) (isLimitOp bool) {
 }
 
 func parseSort(n *RqlNode, root *RqlRootNode) (isSortOp bool) {
+	if n == nil {
+		return false
+	}
 	if strings.ToUpper(n.Op) == "SORT" {
 		for _, s := range n.Args {
 			property := s.(string)
@@ -89,46 +95,48 @@ func parseSort(n *RqlNode, root *RqlRootNode) (isSortOp bool) {
 func (r *RqlRootNode) ParseSpecialOps() (err error) {
 	if parseLimit(r.Node, r) || parseSort(r.Node, r) {
 		r.Node = nil
-	} else if strings.ToUpper(r.Node.Op) == "AND" {
-		limitIndex := -1
-		sortIndex := -1
-		for i, c := range r.Node.Args {
-			switch n := c.(type) {
-			case *RqlNode:
-				if parseLimit(n, r) {
-					limitIndex = i
-				} else if parseSort(n, r) {
-					sortIndex = i
+	} else if r.Node != nil {
+		if strings.ToUpper(r.Node.Op) == "AND" {
+			limitIndex := -1
+			sortIndex := -1
+			for i, c := range r.Node.Args {
+				switch n := c.(type) {
+				case *RqlNode:
+					if parseLimit(n, r) {
+						limitIndex = i
+					} else if parseSort(n, r) {
+						sortIndex = i
+					}
 				}
 			}
-		}
-		if limitIndex >= 0 {
-			if sortIndex > limitIndex {
-				sortIndex = sortIndex - 1
-			}
-			if len(r.Node.Args) == 2 {
-				keepIndex := 0
-				if limitIndex == 0 {
-					keepIndex = 1
+			if limitIndex >= 0 {
+				if sortIndex > limitIndex {
+					sortIndex = sortIndex - 1
 				}
-				r.Node = r.Node.Args[keepIndex].(*RqlNode)
-			} else {
-				r.Node.Args = append(r.Node.Args[:limitIndex], r.Node.Args[limitIndex+1:]...)
-			}
-		}
-		if sortIndex >= 0 {
-			if len(r.Node.Args) == 2 {
-				keepIndex := 0
-				if sortIndex == 0 {
-					keepIndex = 1
+				if len(r.Node.Args) == 2 {
+					keepIndex := 0
+					if limitIndex == 0 {
+						keepIndex = 1
+					}
+					r.Node = r.Node.Args[keepIndex].(*RqlNode)
+				} else {
+					r.Node.Args = append(r.Node.Args[:limitIndex], r.Node.Args[limitIndex+1:]...)
 				}
-				r.Node = r.Node.Args[keepIndex].(*RqlNode)
-			} else {
-				r.Node.Args = append(r.Node.Args[:sortIndex], r.Node.Args[sortIndex+1:]...)
 			}
-		}
-		if len(r.Node.Args) == 0 {
-			r.Node = nil
+			if sortIndex >= 0 {
+				if len(r.Node.Args) == 2 {
+					keepIndex := 0
+					if sortIndex == 0 {
+						keepIndex = 1
+					}
+					r.Node = r.Node.Args[keepIndex].(*RqlNode)
+				} else {
+					r.Node.Args = append(r.Node.Args[:sortIndex], r.Node.Args[sortIndex+1:]...)
+				}
+			}
+			if len(r.Node.Args) == 0 {
+				r.Node = nil
+			}
 		}
 	}
 
@@ -176,6 +184,10 @@ func parse(ts []TokenString) (node *RqlNode, err error) {
 
 	childTs := [][]TokenString{}
 	node = &RqlNode{}
+
+	if len(ts) == 0 {
+		return nil, nil
+	}
 
 	if isParenthesisBloc(ts) && findClosingIndex(ts[1:]) == len(ts)-2 {
 		ts = ts[1 : len(ts)-1]
