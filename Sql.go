@@ -123,7 +123,27 @@ func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 	})
 	st.SetOpFunc("AND", st.GetAndOrTranslatorOpFunc("AND"))
 	st.SetOpFunc("OR", st.GetAndOrTranslatorOpFunc("OR"))
-	st.SetOpFunc("EQ", st.GetFieldValueTranslatorFunc("=", nil))
+	st.SetOpFunc("EQ", TranslatorOpFunc(func(n *RqlNode) (string, error) {
+		op := `=`
+		field := n.Args[0].(string)
+
+		if !IsValidField(field) {
+			return ``, fmt.Errorf("Invalid field name : %s", field)
+		}
+
+		value, err := url.QueryUnescape(n.Args[1].(string))
+		if err != nil {
+			return "", err
+		}
+
+		if value == `null` {
+			return fmt.Sprintf("%s IS NULL", field), nil
+		}
+
+		value = Quote(value)
+
+		return fmt.Sprintf("%s %s %s", field, op, value), nil
+	}))
 	st.SetOpFunc("LIKE", st.GetFieldValueTranslatorFunc("LIKE", starToPercentFunc))
 	st.SetOpFunc("MATCH", st.GetFieldValueTranslatorFunc("ILIKE", starToPercentFunc))
 
