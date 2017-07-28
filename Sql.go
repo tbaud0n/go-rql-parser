@@ -204,7 +204,7 @@ func (st *SqlTranslator) GetFieldValueTranslatorFunc(op string, valueAlterFunc A
 
 func IsValidField(s string) bool {
 	for _, ch := range s {
-		if !isLetter(ch) && !isDigit(ch) && ch != '_' && ch != '-' {
+		if !isLetter(ch) && !isDigit(ch) && ch != '_' && ch != '-' && ch != '.' {
 			return false
 		}
 	}
