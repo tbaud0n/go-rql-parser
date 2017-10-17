@@ -283,10 +283,13 @@ func getBlocNode(tb []TokenString) (*RqlNode, error) {
 
 		n.Op = tb[2].s
 		n.Args = []interface{}{tb[0].s}
-		if len(tb) == 5 {
+		tbLen := len(tb)
+		if tbLen == 4 {
+			n.Args = append(n.Args, ``)
+		} else if tbLen == 5 {
 			n.Args = append(n.Args, tb[4].s)
-		} else if isParenthesisBloc(tb[4:]) && findClosingIndex(tb[5:]) == len(tb)-6 {
-			args, err := parseFuncArgs(tb[5 : len(tb)-1])
+		} else if isParenthesisBloc(tb[4:]) && findClosingIndex(tb[5:]) == tbLen-6 {
+			args, err := parseFuncArgs(tb[5 : tbLen-1])
 			if err != nil {
 				return nil, err
 			}
