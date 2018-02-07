@@ -152,6 +152,15 @@ func NewParser() *Parser {
 }
 
 func (p *Parser) Parse(r io.Reader) (root *RqlRootNode, err error) {
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		err, ok := r.(error)
+	// 		if !ok {
+	// 			err = fmt.Errorf("pkg: %v", r)
+	// 		}
+	// 		fmt.Println(err)
+	// 	}
+	// }()
 	var tokenStrings []TokenString
 	if tokenStrings, err = p.s.Scan(r); err != nil {
 		return nil, err
@@ -238,14 +247,14 @@ func splitByBasisOp(tb []TokenString) (op string, tbs [][]TokenString) {
 	for _, bt := range basisTokenGroups {
 		btExtended := append(bt, ILLEGAL)
 		for i, ts := range tb {
-			if ts.t == OPENING_PARENTHESIS {
+			if ts.t == OPENING_PARENTHESIS && lastIndex == i-1 {
 				prof++
-			} else if ts.t == CLOSING_PARENTHESIS {
+			} else if ts.t == CLOSING_PARENTHESIS && prof > 0 {
 				prof--
 			} else if prof == 0 {
 				if isTokenInSlice(bt, ts.t) && isTokenInSlice(btExtended, matchingToken) {
-					tbs = append(tbs, tb[lastIndex:i])
 					matchingToken = ts.t
+					tbs = append(tbs, tb[lastIndex:i])
 					lastIndex = i + 1
 				}
 			}
@@ -286,8 +295,8 @@ func getBlocNode(tb []TokenString) (*RqlNode, error) {
 		tbLen := len(tb)
 		if tbLen == 4 {
 			n.Args = append(n.Args, ``)
-		} else if tbLen == 5 {
-			n.Args = append(n.Args, tb[4].s)
+			// } else if tbLen == 5 {
+			// 	n.Args = append(n.Args, tb[4].s)
 		} else if isParenthesisBloc(tb[4:]) && findClosingIndex(tb[5:]) == tbLen-6 {
 			args, err := parseFuncArgs(tb[5 : tbLen-1])
 			if err != nil {
@@ -295,7 +304,11 @@ func getBlocNode(tb []TokenString) (*RqlNode, error) {
 			}
 			n.Args = append(n.Args, args...)
 		} else {
-			return nil, fmt.Errorf("Unrecognized DoubleEqual bloc : " + TokenBloc(tb).String())
+			arg := ``
+			for _, a := range tb[4:] {
+				arg = arg + a.s
+			}
+			n.Args = append(n.Args, arg)
 		}
 
 	} else {
