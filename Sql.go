@@ -3,6 +3,7 @@ package rqlParser
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -20,42 +21,6 @@ func (st *SqlTranslator) SetOpFunc(op string, f TranslatorOpFunc) {
 func (st *SqlTranslator) DeleteOpFunc(op string) {
 	delete(st.sqlOpsDic, strings.ToUpper(op))
 }
-
-// func (st *SqlTranslator) GetSimpleTranslatorFunc(op string, betweenParenthesis bool, quoteStr bool) TranslatorOpFunc {
-// 	return TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
-// 		sep := ""
-// 		quote := ""
-
-// 		for _, a := range n.Args {
-// 			s = s + sep
-// 			switch a.(type) {
-// 			case string:
-// 				v := a.(string)
-// 				if _, err := strconv.Atoi(v); err != nil {
-// 					v = quote + v + quote
-// 				}
-// 				s = s + v
-// 			case *RqlNode:
-// 				var _s string
-// 				_s, err = st.where(a.(*RqlNode))
-// 				if err != nil {
-// 					return "", err
-// 				}
-// 				s = s + _s
-// 			}
-
-// 			sep = " " + op + " "
-// 			if quoteStr {
-// 				quote = "'"
-// 			}
-// 		}
-
-// 		if betweenParenthesis {
-// 			s = "(" + s + ")"
-// 		}
-// 		return
-// 	})
-// }
 
 func (st *SqlTranslator) Where() (string, error) {
 	return st.where(st.rootNode.Node)
@@ -118,11 +83,21 @@ func (st *SqlTranslator) Sql() (string, error) {
 func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 	st = &SqlTranslator{r, map[string]TranslatorOpFunc{}}
 
-	starToPercentFunc := AlterStringFunc(func(s string) string {
-		return strings.Replace(s, `*`, `%`, -1)
+	starToPercentFunc := AlterStringFunc(func(s string) (string, error) {
+		return strings.Replace(Quote(s), `*`, `%`, -1), nil
 	})
+
 	st.SetOpFunc("AND", st.GetAndOrTranslatorOpFunc("AND"))
 	st.SetOpFunc("OR", st.GetAndOrTranslatorOpFunc("OR"))
+	st.SetOpFunc("LIKE", st.GetFieldValueTranslatorFunc("LIKE", starToPercentFunc))
+	st.SetOpFunc("MATCH", st.GetFieldValueTranslatorFunc("ILIKE", starToPercentFunc))
+	st.SetOpFunc("GT", st.GetFieldValueTranslatorFunc(">", nil))
+	st.SetOpFunc("LT", st.GetFieldValueTranslatorFunc("<", nil))
+	st.SetOpFunc("GE", st.GetFieldValueTranslatorFunc(">=", nil))
+	st.SetOpFunc("LE", st.GetFieldValueTranslatorFunc("<=", nil))
+	st.SetOpFunc("NE", st.GetFieldValueTranslatorFunc("!=", nil))
+	st.SetOpFunc("SUM", st.GetOpFirstTranslatorFunc("SUM", nil))
+	st.SetOpFunc("NOT", st.GetOpFirstTranslatorFunc("NOT", nil))
 	st.SetOpFunc("EQ", TranslatorOpFunc(func(n *RqlNode) (string, error) {
 		op := `=`
 		field := n.Args[0].(string)
@@ -144,8 +119,6 @@ func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 
 		return fmt.Sprintf("%s %s %s", field, op, value), nil
 	}))
-	st.SetOpFunc("LIKE", st.GetFieldValueTranslatorFunc("LIKE", starToPercentFunc))
-	st.SetOpFunc("MATCH", st.GetFieldValueTranslatorFunc("ILIKE", starToPercentFunc))
 
 	return
 }
@@ -178,27 +151,103 @@ func (st *SqlTranslator) GetAndOrTranslatorOpFunc(op string) TranslatorOpFunc {
 	})
 }
 
-type AlterStringFunc func(string) string
+type AlterStringFunc func(string) (string, error)
 
 func (st *SqlTranslator) GetFieldValueTranslatorFunc(op string, valueAlterFunc AlterStringFunc) TranslatorOpFunc {
-	return TranslatorOpFunc(func(n *RqlNode) (string, error) {
-		field := n.Args[0].(string)
+	return TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
+		sep := ""
 
-		if !IsValidField(field) {
-			return ``, fmt.Errorf("Invalid field name : %s", field)
+		for _, a := range n.Args {
+			s += sep
+			switch v := a.(type) {
+			case string:
+				var _s string
+				_, err := strconv.ParseInt(v, 10, 64)
+				if err == nil || IsValidField(v) {
+					_s = v
+				} else if valueAlterFunc != nil {
+					_s, err = valueAlterFunc(v)
+					if err != nil {
+						return "", err
+					}
+				} else {
+					_s = Quote(v)
+				}
+
+				s += _s
+			case *RqlNode:
+				var _s string
+				_s, err = st.where(v)
+				if err != nil {
+					return "", err
+				}
+				s = s + _s
+			}
+
+			sep = " " + op + " "
 		}
 
-		value, err := url.QueryUnescape(n.Args[1].(string))
-		if err != nil {
-			return "", err
+		return "(" + s + ")", nil
+
+		// field := n.Args[0].(string)
+
+		// if !IsValidField(field) {
+		// 	return ``, fmt.Errorf("Invalid field name : %s", field)
+		// }
+
+		// value, err := url.QueryUnescape(n.Args[1].(string))
+		// if err != nil {
+		// 	return "", err
+		// }
+
+		// if valueAlterFunc != nil {
+		// 	value, err = valueAlterFunc(value)
+		// 	if err != nil {
+		// 		return "", err
+		// 	}
+		// } else {
+		// 	value = Quote(value)
+		// }
+
+		// return fmt.Sprintf("%s %s %s", field, op, value), nil
+	})
+}
+
+func (st *SqlTranslator) GetOpFirstTranslatorFunc(op string, valueAlterFunc AlterStringFunc) TranslatorOpFunc {
+	return TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
+		sep := ""
+
+		for _, a := range n.Args {
+			s += sep
+			switch v := a.(type) {
+			case string:
+				var _s string
+				_, err := strconv.ParseInt(v, 10, 64)
+				if err == nil || IsValidField(v) {
+					_s = v
+				} else if valueAlterFunc != nil {
+					_s, err = valueAlterFunc(v)
+					if err != nil {
+						return "", err
+					}
+				} else {
+					_s = Quote(v)
+				}
+
+				s += _s
+			case *RqlNode:
+				var _s string
+				_s, err = st.where(v)
+				if err != nil {
+					return "", err
+				}
+				s = s + _s
+			}
+
+			sep = " , "
 		}
 
-		if valueAlterFunc != nil {
-			value = valueAlterFunc(value)
-		}
-		value = Quote(value)
-
-		return fmt.Sprintf("%s %s %s", field, op, value), nil
+		return op + "(" + s + ")", nil
 	})
 }
 
