@@ -157,21 +157,29 @@ func (st *SqlTranslator) GetFieldValueTranslatorFunc(op string, valueAlterFunc A
 	return TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
 		sep := ""
 
-		for _, a := range n.Args {
+		for i, a := range n.Args {
 			s += sep
 			switch v := a.(type) {
 			case string:
 				var _s string
-				_, err := strconv.ParseInt(v, 10, 64)
-				if err == nil || IsValidField(v) {
-					_s = v
-				} else if valueAlterFunc != nil {
-					_s, err = valueAlterFunc(v)
-					if err != nil {
-						return "", err
+				if i == 0 {
+					if IsValidField(v) {
+						_s = v
+					} else {
+						return "", fmt.Errorf("First argument must be a valid field name (arg: %s)", v)
 					}
 				} else {
-					_s = Quote(v)
+					_, err := strconv.ParseInt(v, 10, 64)
+					if err == nil {
+						_s = v
+					} else if valueAlterFunc != nil {
+						_s, err = valueAlterFunc(v)
+						if err != nil {
+							return "", err
+						}
+					} else {
+						_s = Quote(v)
+					}
 				}
 
 				s += _s
