@@ -84,7 +84,11 @@ func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 	st = &SqlTranslator{r, map[string]TranslatorOpFunc{}}
 
 	starToPercentFunc := AlterStringFunc(func(s string) (string, error) {
-		return strings.Replace(Quote(s), `*`, `%`, -1), nil
+		v, err := url.QueryUnescape(s)
+		if err != nil {
+			return ``, err
+		}
+		return strings.Replace(Quote(v), `*`, `%`, -1), nil
 	})
 
 	st.SetOpFunc("AND", st.GetAndOrTranslatorOpFunc("AND"))
