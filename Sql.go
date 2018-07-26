@@ -93,38 +93,39 @@ func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 
 	st.SetOpFunc("AND", st.GetAndOrTranslatorOpFunc("AND"))
 	st.SetOpFunc("OR", st.GetAndOrTranslatorOpFunc("OR"))
+
+	st.SetOpFunc("NE", st.GetEqualityTranslatorOpFunc("!=", "IS NOT"))
+	st.SetOpFunc("EQ", st.GetEqualityTranslatorOpFunc("=", "IS"))
+
 	st.SetOpFunc("LIKE", st.GetFieldValueTranslatorFunc("LIKE", starToPercentFunc))
 	st.SetOpFunc("MATCH", st.GetFieldValueTranslatorFunc("ILIKE", starToPercentFunc))
 	st.SetOpFunc("GT", st.GetFieldValueTranslatorFunc(">", nil))
 	st.SetOpFunc("LT", st.GetFieldValueTranslatorFunc("<", nil))
 	st.SetOpFunc("GE", st.GetFieldValueTranslatorFunc(">=", nil))
 	st.SetOpFunc("LE", st.GetFieldValueTranslatorFunc("<=", nil))
-	st.SetOpFunc("NE", st.GetFieldValueTranslatorFunc("!=", nil))
 	st.SetOpFunc("SUM", st.GetOpFirstTranslatorFunc("SUM", nil))
 	st.SetOpFunc("NOT", st.GetOpFirstTranslatorFunc("NOT", nil))
-	st.SetOpFunc("EQ", TranslatorOpFunc(func(n *RqlNode) (string, error) {
-		op := `=`
-		field := n.Args[0].(string)
 
-		if !IsValidField(field) {
-			return ``, fmt.Errorf("Invalid field name : %s", field)
-		}
+	return
+}
 
+func (st *SqlTranslator) GetEqualityTranslatorOpFunc(op, nullOp string) TranslatorOpFunc {
+	return TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
 		value, err := url.QueryUnescape(n.Args[1].(string))
 		if err != nil {
 			return "", err
 		}
 
 		if value == `null` {
-			return fmt.Sprintf("%s IS NULL", field), nil
+			field := n.Args[0].(string)
+			if !IsValidField(field) {
+				return ``, fmt.Errorf("Invalid field name : %s", field)
+			}
+			return fmt.Sprintf("%s %s NULL", field, nullOp), nil
 		}
 
-		value = Quote(value)
-
-		return fmt.Sprintf("%s %s %s", field, op, value), nil
-	}))
-
-	return
+		return st.GetFieldValueTranslatorFunc(op, nil)(n)
+	})
 }
 
 func (st *SqlTranslator) GetAndOrTranslatorOpFunc(op string) TranslatorOpFunc {
@@ -200,28 +201,6 @@ func (st *SqlTranslator) GetFieldValueTranslatorFunc(op string, valueAlterFunc A
 		}
 
 		return "(" + s + ")", nil
-
-		// field := n.Args[0].(string)
-
-		// if !IsValidField(field) {
-		// 	return ``, fmt.Errorf("Invalid field name : %s", field)
-		// }
-
-		// value, err := url.QueryUnescape(n.Args[1].(string))
-		// if err != nil {
-		// 	return "", err
-		// }
-
-		// if valueAlterFunc != nil {
-		// 	value, err = valueAlterFunc(value)
-		// 	if err != nil {
-		// 		return "", err
-		// 	}
-		// } else {
-		// 	value = Quote(value)
-		// }
-
-		// return fmt.Sprintf("%s %s %s", field, op, value), nil
 	})
 }
 
