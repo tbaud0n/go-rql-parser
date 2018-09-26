@@ -53,15 +53,13 @@ The library support by default the following RQL operators :
 ## Append supported operators
 It's easy to handle new operators by simply adding a `TranslatorOpFunc` to the `SQLTranslator` :
     
-    query := `and(eq(foo,42),between(price,10,100))`
+    query := `or(eq(foo,42),between(price,10,100))`
     rqlRootNode, err := p.Parse(query) 
     if err != nil { 
       panic("Query is not a valid rql : " + err.Error()) 
     }
-    sqlTranslator, err := rqlParser.NewSqlTranslator(rqlNode)
-    if err != nil { 
-      panic(err) 
-    }
+
+    sqlTranslator := rqlParser.NewSqlTranslator(rqlNode)
     
     // Before translating the node, just add the custom operator
     // let's define a new function to handle beetween operator
@@ -108,8 +106,11 @@ It's easy to handle new operators by simply adding a `TranslatorOpFunc` to the `
 	}
     
     sqlTranslator.SetOpFunc(`between`, rqlParser.TranslatorOpFunc(betweenTranslatorFunc))
-    
-    fmt.Println(sqlTranslator.Sql()) // Will print : "WHERE (foo=42) AND ((price >= 10) AND (price <= 100))"
+    s, err := sqlTranslator.Sql() 
+    if err != nil { 
+      panic(err) 
+    }
+    fmt.Println(s) // Will print : "WHERE ((foo=42) OR ((price >= 10) AND (price <= 100)))"
 
 ## Contributions
 
