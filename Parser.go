@@ -201,10 +201,10 @@ func parse(ts []TokenString) (node *RqlNode, err error) {
 	if isParenthesisBloc(ts) && findClosingIndex(ts[1:]) == len(ts)-2 {
 		ts = ts[1 : len(ts)-1]
 	}
-	// __printTB("\nParsing : ", ts)
 
+	// __printTB("", ts)
 	node.Op, childTs = splitByBasisOp(ts)
-
+	// fmt.Println(len(childTs))
 	if node.Op == "" || len(childTs) == 1 {
 		return getBlocNode(ts)
 	}
@@ -247,7 +247,7 @@ func splitByBasisOp(tb []TokenString) (op string, tbs [][]TokenString) {
 	for _, bt := range basisTokenGroups {
 		btExtended := append(bt, ILLEGAL)
 		for i, ts := range tb {
-			if ts.t == OPENING_PARENTHESIS && lastIndex == i-1 {
+			if ts.t == OPENING_PARENTHESIS { // && lastIndex == i-1 {
 				prof++
 			} else if ts.t == CLOSING_PARENTHESIS && prof > 0 {
 				prof--
@@ -278,9 +278,16 @@ func getBlocNode(tb []TokenString) (*RqlNode, error) {
 		return nil, IsValueError
 	} else if isFuncStyleBloc(tb) {
 		var err error
-
 		n.Op = tb[0].s
-		n.Args, err = parseFuncArgs(tb[2 : findClosingIndex(tb[2:])+2])
+		tb = tb[2:]
+		ci := findClosingIndex(tb)
+		// fmt.Println(len(tb), tb[ci].s)
+		if len(tb) > ci+1 && tb[ci+1].t != CLOSING_PARENTHESIS && tb[ci+1].t != COMMA {
+			return nil, fmt.Errorf("Unrecognized func style bloc (missing comma?)")
+		}
+		// __printTB("", tb)
+		// __printTB("", tb[:ci])
+		n.Args, err = parseFuncArgs(tb[:ci])
 		if err != nil {
 			return nil, err
 		}
@@ -289,7 +296,6 @@ func getBlocNode(tb []TokenString) (*RqlNode, error) {
 		n.Args = []interface{}{tb[0].s, tb[2].s}
 
 	} else if isDoubleEqualBloc(tb) {
-
 		n.Op = tb[2].s
 		n.Args = []interface{}{tb[0].s}
 		tbLen := len(tb)

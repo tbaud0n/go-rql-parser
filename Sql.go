@@ -23,6 +23,9 @@ func (st *SqlTranslator) DeleteOpFunc(op string) {
 }
 
 func (st *SqlTranslator) Where() (string, error) {
+	if st.rootNode == nil {
+		return "", nil
+	}
 	return st.where(st.rootNode.Node)
 }
 
@@ -38,6 +41,9 @@ func (st *SqlTranslator) where(n *RqlNode) (string, error) {
 }
 
 func (st *SqlTranslator) Limit() (sql string) {
+	if st.rootNode == nil {
+		return
+	}
 	limit := st.rootNode.Limit()
 	if limit != "" && strings.ToUpper(limit) != "INFINITY" {
 		sql = " LIMIT " + limit
@@ -46,13 +52,16 @@ func (st *SqlTranslator) Limit() (sql string) {
 }
 
 func (st *SqlTranslator) Offset() (sql string) {
-	if st.rootNode.Offset() != "" {
+	if st.rootNode != nil && st.rootNode.Offset() != "" {
 		sql = " OFFSET " + st.rootNode.Offset()
 	}
 	return
 }
 
 func (st *SqlTranslator) Sort() (sql string) {
+	if st.rootNode == nil {
+		return
+	}
 	sorts := st.rootNode.Sort()
 	if len(sorts) > 0 {
 		sql = " ORDER BY "
@@ -69,13 +78,32 @@ func (st *SqlTranslator) Sort() (sql string) {
 	return
 }
 
-func (st *SqlTranslator) Sql() (string, error) {
-	sql, err := st.Where()
+func (st *SqlTranslator) Sql() (sql string, err error) {
+	var where string
+
+	where, err = st.Where()
 	if err != nil {
-		return sql, err
+		return
 	}
 
-	sql = sql + st.Sort() + st.Limit() + st.Offset()
+	if len(where) > 0 {
+		sql = `WHERE ` + where
+	}
+
+	sort := st.Sort()
+	if len(sort) > 0 {
+		sql += `ORDER BY ` + sort
+	}
+
+	limit := st.Limit()
+	if len(limit) > 0 {
+		sql += `LIMIT ` + limit
+	}
+
+	offset := st.Offset()
+	if len(offset) > 0 {
+		sql += `OFFSET ` + offset
+	}
 
 	return sql, nil
 }
@@ -109,19 +137,20 @@ func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 	return
 }
 
-func (st *SqlTranslator) GetEqualityTranslatorOpFunc(op, nullOp string) TranslatorOpFunc {
+func (st *SqlTranslator) GetEqualityTranslatorOpFunc(op, specialOp string) TranslatorOpFunc {
 	return TranslatorOpFunc(func(n *RqlNode) (s string, err error) {
 		value, err := url.QueryUnescape(n.Args[1].(string))
 		if err != nil {
 			return "", err
 		}
 
-		if value == `null` {
+		if value == `null` || value == `true` || value == `false` {
 			field := n.Args[0].(string)
 			if !IsValidField(field) {
 				return ``, fmt.Errorf("Invalid field name : %s", field)
 			}
-			return fmt.Sprintf("%s %s NULL", field, nullOp), nil
+
+			return fmt.Sprintf("(%s %s %s)", field, specialOp, strings.ToUpper(value)), nil
 		}
 
 		return st.GetFieldValueTranslatorFunc(op, nil)(n)

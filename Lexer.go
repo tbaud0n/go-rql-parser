@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net/url"
 )
 
 const (
@@ -52,7 +53,15 @@ type TokenString struct {
 type Token int
 
 func NewTokenString(t Token, s string) TokenString {
-	return TokenString{t: t, s: s}
+	var unescapedString string
+	if len(s) > 0 && string(s[0]) != "+" {
+		unescapedString, _ = url.QueryUnescape(s)
+	} else {
+		//Golang`s "unescape" method replaces "+" with " ", however "+" literal is not possible in urlencoded string
+		//this is a case of sorting argument specification: eg: sort(+name), thus in this case string left unmodified
+		unescapedString = s
+	}
+	return TokenString{t: t, s: unescapedString}
 }
 
 type Scanner struct {
