@@ -11,6 +11,7 @@ var IsValueError error = fmt.Errorf("Bloc is a value")
 
 type TokenBloc []TokenString
 
+// String print the TokenBloc value for test purpose only
 func (tb TokenBloc) String() (s string) {
 	for _, t := range tb {
 		s = s + fmt.Sprintf("'%s' ", t.s)
@@ -301,8 +302,6 @@ func getBlocNode(tb []TokenString) (*RqlNode, error) {
 		tbLen := len(tb)
 		if tbLen == 4 {
 			n.Args = append(n.Args, ``)
-			// } else if tbLen == 5 {
-			// 	n.Args = append(n.Args, tb[4].s)
 		} else if isParenthesisBloc(tb[4:]) && findClosingIndex(tb[5:]) == tbLen-6 {
 			args, err := parseFuncArgs(tb[5 : tbLen-1])
 			if err != nil {

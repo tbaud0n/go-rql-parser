@@ -92,17 +92,17 @@ func (st *SqlTranslator) Sql() (sql string, err error) {
 
 	sort := st.Sort()
 	if len(sort) > 0 {
-		sql += `ORDER BY ` + sort
+		sql += sort
 	}
 
 	limit := st.Limit()
 	if len(limit) > 0 {
-		sql += `LIMIT ` + limit
+		sql += limit
 	}
 
 	offset := st.Offset()
 	if len(offset) > 0 {
-		sql += `OFFSET ` + offset
+		sql += offset
 	}
 
 	return sql, nil
@@ -112,11 +112,11 @@ func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 	st = &SqlTranslator{r, map[string]TranslatorOpFunc{}}
 
 	starToPercentFunc := AlterStringFunc(func(s string) (string, error) {
-		v, err := url.QueryUnescape(s)
-		if err != nil {
-			return ``, err
-		}
-		return strings.Replace(Quote(v), `*`, `%`, -1), nil
+		// v, err := url.QueryUnescape(s)
+		// if err != nil {
+		// 	return ``, err
+		// }
+		return strings.Replace(Quote(s), `*`, `%`, -1), nil
 	})
 
 	st.SetOpFunc("AND", st.GetAndOrTranslatorOpFunc("AND"))
@@ -131,8 +131,8 @@ func NewSqlTranslator(r *RqlRootNode) (st *SqlTranslator) {
 	st.SetOpFunc("LT", st.GetFieldValueTranslatorFunc("<", nil))
 	st.SetOpFunc("GE", st.GetFieldValueTranslatorFunc(">=", nil))
 	st.SetOpFunc("LE", st.GetFieldValueTranslatorFunc("<=", nil))
-	st.SetOpFunc("SUM", st.GetOpFirstTranslatorFunc("SUM", nil))
 	st.SetOpFunc("NOT", st.GetOpFirstTranslatorFunc("NOT", nil))
+	// st.SetOpFunc("SUM", st.GetOpFirstTranslatorFunc("SUM", nil))
 
 	return
 }
@@ -264,7 +264,7 @@ func (st *SqlTranslator) GetOpFirstTranslatorFunc(op string, valueAlterFunc Alte
 				s = s + _s
 			}
 
-			sep = " , "
+			sep = ", "
 		}
 
 		return op + "(" + s + ")", nil
