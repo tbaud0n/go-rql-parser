@@ -1,5 +1,5 @@
 # GO-RQL-PARSER
-[![Build Status](https://travis-ci.org/tbaud0n/go-rql-parser.svg?branch=master)](https://travis-ci.org/tbaud0n/go-rql-parser)
+[![Build Status](https://travis-ci.org/tbaud0n/go-rql-parser.svg?branch=master)](https://travis-ci.org/tbaud0n/go-rql-parser)    [![Coverage Status](https://coveralls.io/repos/github/tbaud0n/go-rql-parser/badge.svg?branch=master)](https://coveralls.io/github/tbaud0n/go-rql-parser?branch=master)
 
 Small, simple and lightweight library for Go web applications to translate [RQL (Resource Query Language)](http://www.persvr.org/rql/) queries to SQL
 
